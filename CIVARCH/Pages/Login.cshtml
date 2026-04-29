@@ -1,0 +1,27 @@
+﻿@page "/Login"
+@model LoginModel
+@{
+    ViewData["Title"] = "Přihlášení";
+}
+
+<div class="login-wrapper overflow-y-hidden pb-3">
+    <div class="login-container">
+        <h2 class="login-title">Přihlášení</h2>
+        <form method="post">
+            <div class="form-group">
+                <label asp-for="Username" class="form-label">Uživatelské jméno</label>
+                <input asp-for="Username" class="form-input" autocomplete="on" required/>
+            </div>
+            <div class="form-group">
+                <label asp-for="Password" class="form-label">Heslo</label>
+                <input asp-for="Password" class="form-input" type="password" autocomplete="on" required/>
+            </div>
+            <button type="submit" class="submit-btn">Přihlásit se</button>
+        </form>
+
+        @foreach (var err in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+        {
+            <div class="form-error">@err.ErrorMessage</div>
+        }
+    </div>
+</div>

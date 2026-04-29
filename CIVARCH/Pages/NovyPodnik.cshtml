@@ -1,0 +1,131 @@
+﻿@page
+@model CIVARCH.NovyZaznamModel
+@{
+    ViewData["Title"] = "Nový Podnik - " + AppConfig.AppName;
+
+
+
+    if (HttpMethods.IsPost(Request.Method))
+    {
+        string? OkrOrp = Request.Form["OkrOrp"];
+        string? CisOrp = Request.Form["CisOrp"];
+        string? OrgNazev1 = Request.Form["OrgNazev1"];
+        string? Ulice = Request.Form["Ulice"];
+        string? Obec = Request.Form["Obec"];
+        string? Psc = Request.Form["Psc"];
+        string? PredmetCinn = Request.Form["PredmetCinn"];
+
+        var highestPodnikyNum = await DatabaseHandler.GetHighestColumnIndexAsync("tbPODNIK", "PODNIK_Id");
+        var podnik = new Podnik((highestPodnikyNum + 1).ToString(), OrgNazev1, null, Ulice, Obec, Psc, PredmetCinn, OkrOrp, CisOrp);
+        bool rcExists = false;
+
+        DatabaseHandler.SavePodnik(podnik);
+        <div class="text-center">
+                <p>Data úspěšně uložena do databáze!</p>
+            </div>
+        }
+    }
+}
+
+<div class="text-center">
+    <div class="civarch-zaznam" style="max-width: 100%">
+        <div class="col-md-2"></div>
+        <div class="col-md">
+            <form method="post" action="">
+                <table border="0" class="table table-borderless">
+                    <tr>
+                        <td colspan="2" style="font-size: 2rem">Podnik</td>
+                    </tr>
+                    <tr>
+                        <td><label for="OkrOrp">Okr | Orp:</label></td>
+                        <td><input class="form-control" type="text" name="OkrOrp" required /></td>
+                    </tr>
+                    <tr>
+                        <td><label for="CisOrp">Číslo Orp:</label></td>
+                        <td><input class="form-control" type="number" name="CisOrp" required /></td>
+                    </tr>
+                    <tr>
+                        <td><label for="OgNazev1">Název organizace:</label></td>
+                        <td><input class="form-control" type="text" name="OrgNazev1" /></td>
+                    </tr>
+                    <tr>
+                        <td><label for="Ulice">Ulice:</label></td>
+                        <td><input class="form-control" type="text" name="Ulice" /></td>
+                    </tr>
+                    <tr>
+                        <td><label for="Obec">Obec:</label></td>
+                        <td><input class="form-control" type="text" name="Obec" required /></td>
+                    </tr>
+                    <tr>
+                        <td><label for="Psc">PSC:</label></td>
+                        <td><input class="form-control" type="number" name="Psc" required /></td>
+                    </tr>
+                    <tr>
+                        <td><label for="PredmetCinn">Předmět Činnosti:</label></td>
+                        <td><input class="form-control" type="text" name="PredmetCinn" required /></td>
+                    </tr>                  
+                    <tr>
+                        <td colspan="2" style="justify-content:center"><input class="form-control" type="submit" value="Uložit" /></td>
+                    </tr>
+                </table>
+            </form>
+        </div>
+
+        <div class="col-md-2"></div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        //Don't touch this, it's sorting the Podniky names and it works nice
+        $(function () {
+        const ulist = document.querySelector("#refdocs_list ul");
+
+        //escapes random chars
+        function escapeRegex(text) {
+        return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        //sorts the objects
+        function customSort(arr) {
+        return arr.sort((a, b) => a.localeCompare(b));
+        }
+
+
+        function renderFilteredList(filtered, search) {
+        ulist.innerHTML = "";
+        const regex = new RegExp(escapeRegex(search), 'gi');
+        filtered.forEach(name => {
+        const li = document.createElement("li");
+        li.innerHTML = name.replace(regex, match => `<mark>${match}</mark>`);
+        li.setAttribute("data-raw", name);
+        ulist.appendChild(li);
+        });
+        }
+
+        $('#refdocs').on('keyup', function () {
+        const search = $(this).val().trim();
+
+        //only activates with 3+ letters, change if wanted
+        if (search.length >= 3) {
+        const filtered = podnikListJson.filter(name =>
+        name.toLowerCase().includes(search.toLowerCase())
+        );
+        const sorted = customSort(filtered);
+        renderFilteredList(sorted, search);
+        } else {
+        ulist.innerHTML = "";
+        }
+        });
+            $('#refdocs_list').on('click', 'ul li', function () {
+            $('#refdocs_list ul li').removeClass('selected');
+            $(this).addClass('selected');
+            $('#refdocs').val($(this).data('raw'));
+            });
+            });
+    </script>
+
+    <script>
+        //loads podnik names from DB
+        const podnikListJson = JSON.parse('@Html.Raw(System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(System.Text.Json.JsonSerializer.Serialize(DatabaseHandler.LoadPodnikNames().GetAwaiter().GetResult())))');
+    </script>
+
+</div>

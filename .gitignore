@@ -1,0 +1,37 @@
+## Binaries & build
+bin/
+obj/
+out/
+publish/
+
+## Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Local secrets & credentials – NIKDY do gitu!
+appsettings.Local.json
+appsettings.*.local.json
+secrets.json
+
+## Rider / JetBrains
+.idea/
+
+## macOS
+.DS_Store
+
+## Windows
+Thumbs.db
+
+## Logs
+*.log
+logs/
+
+## NuGet
+*.nupkg
+.nuget/
+
+## ASP.NET Core user secrets
+/CIVARCH/Properties/launchSettings.json

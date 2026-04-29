@@ -1,0 +1,258 @@
+﻿@page
+@model CIVARCH.Pages.UpravaZaznamuModel
+@{
+    ViewData["Title"] = "Úprava záznamu - " + AppConfig.AppName;
+
+    Zaznam _zaznam;
+
+    string id = "1";
+    bool update = false;
+
+    if (HttpMethods.IsPost(Request.Method))
+    {
+        id = Request.Form["Id"];
+        update = true;
+    }
+
+    if (Request.Query["Id"] != "")
+    {
+        id = Request.Query["Id"];
+    }
+
+    _zaznam = await DatabaseHandler.LoadSingleZaznamById(id);
+    if (update)
+    {
+        string prijmeni = Request.Form["Prijmeni"];
+        string jmeno = Request.Form["Jmeno"];
+        string titul = Request.Form["Titul"];
+        string rodneJm = Request.Form["RodneJm"];
+        string rc = Request.Form["RC"];
+        string datumNarozeni = Request.Form["DatumNarozeni"];
+        string adresaUlice = Request.Form["Adresa_Ulice"];
+        string adresaCp = Request.Form["Adresa_CP"];
+        string adresaObec = Request.Form["Adresa_Obec"];
+        string adresaPSC = Request.Form["Adresa_PSC"];
+        string rizeniPodnik = Request.Form["Rizeni_Podnik"];
+        string rizeniDatNastupu1 = Request.Form["Rizeni_DatNastupu1"];
+        string rizeniDatNastupu2 = Request.Form["Rizeni_DatNastupu1"];
+        string rizeniDatum = Request.Form["Rizeni_Datum"];
+        string rizeniDatVystaveno = Request.Form["Rizeni_DatVystaveno"];
+        string rizeniStav = Request.Form["Rizeni_Stav"];
+        string organizace = Request.Form["Organizace"];
+        string zmenaAutor = Request.Form["ZmenaAutor"];
+
+        Zaznam _edited = new(new Obcan(prijmeni, jmeno, titul, rc, rodneJm, new(adresaUlice, adresaCp, adresaObec, adresaPSC), organizace, Convert.ToInt32(id)),
+                             new Rizeni(rizeniPodnik, rizeniDatNastupu1, rizeniDatNastupu2, rizeniDatum, rizeniDatVystaveno, rizeniStav), organizace, zmenaAutor);
+
+        DatabaseHandler.UpdateZaznam(_edited);
+        DatabaseHandler.UpdateRizeniTable(rc);
+    }
+}
+
+
+<div class="text-center">
+    <div>
+        <div class="col-md-2"></div>
+        <div class="col-md">
+            <form method="post" action="">
+                <table border="0" class="table table-borderless">
+                    <tr>
+                        <td colspan="2">Osobní údaje</td>
+                    </tr>
+                    <tr>
+                        <td><label for="Prijmeni">Přijmení:</label></td>
+                        <td><input class="form-control" type="text" name="Prijmeni" value="@(_zaznam.Obcan.Prijmeni)" /></td>
+                    </tr>
+                    <tr>
+                        <td><label for="Jmeno">Jméno:</label></td>
+                        <td><input class="form-control" type="text" name="Jmeno" value="@(_zaznam.Obcan.Jmeno)" /></td>
+                    </tr>
+                    <tr>
+                        <td><label for="Titul">Titul:</label></td>
+                        <td><input class="form-control" type="text" name="Titul" value="@(_zaznam.Obcan.Titul)" /></td>
+                    </tr>
+                    <tr>
+                        <td><label for="RodneJm">Rodné příjmení:</label></td>
+                        <td><input class="form-control" type="text" name="RodneJm" value="@(_zaznam.Obcan.RodneJm)" /></td>
+                    </tr>
+                    <tr>
+                        <td><label for="RC">Rodné číslo:</label></td>
+                        <td><input class="form-control" type="text" name="RC" oninput="validateInputLength(this)" value="@(_zaznam.Obcan.RC)" required /></td>
+                    </tr>
+                    <tr>
+                        <td><label for="DatumNarozeni">Datum narození:</label></td>
+                        <td><input class="form-control" type="date" name="DatumNarozeni" value="@(_zaznam.Obcan.DatumNarozeniFormatovano)" /></td>
+                    </tr>
+                    <tr>
+                        <td colspan="2">Kontaktní adresa</td>
+                    </tr>
+                    <tr>
+                        <td><label for="Adresa_Ulice">Ulice:</label></td>
+                        <td><input class="form-control" type="text" name="Adresa_Ulice" value="@(_zaznam.Obcan.Adresa.Ulice)" /></td>
+                    </tr>
+                    <tr>
+                        <td><label for="Adresa_CP">Číslo popisné:</label></td>
+                        <td><input class="form-control" type="text" name="Adresa_CP" value="@(_zaznam.Obcan.Adresa.CisloPopisne)" /></td>
+                    </tr>
+                    <tr>
+                        <td><label for="Adresa_Obec">Obec:</label></td>
+                        <td><input class="form-control" type="text" name="Adresa_Obec" value="@(_zaznam.Obcan.Adresa.Obec)" /></td>
+                    </tr>
+                    <tr>
+                        <td><label for="Adresa_PSC">PSČ:</label></td>
+                        <td><input class="form-control" type="text" name="Adresa_PSC" value="@(_zaznam.Obcan.Adresa.Psc)" /></td>
+                    </tr>
+                    <tr>
+                        <td colspan="2">Řízení</td>
+                    </tr>
+                    <tr>
+                        <td><label for="Rizeni_Podnik">Podnik:</label></td>
+                        <td>
+                            <div id="refdocs_main">
+                                <div id="refdocs_input">
+                                    <input id="refdocs" name="Rizeni_Podnik" value="@(_zaznam.Obcan.PodnikNazev1)" required />
+                                </div>
+                                <div id="refdocs_wrapper">
+                                    <div id="refdocs_list">
+                                        <ul>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><label for="Rizeni_DatNastupu1">Datum nástupu 1:</label></td>
+                        <td><input class="form-control" type="date" name="Rizeni_DatNastupu1" value="@(_zaznam.Rizeni.DatNastupu1Formatovano)" /></td>
+                    </tr>
+                    <tr>
+                        <td><label for="Rizeni_DatNastupu2">Datum nástupu 2:</label></td>
+                        <td><input class="form-control" type="date" name="Rizeni_DatNastupu2" value="@(_zaznam.Rizeni.DatNastupu2Formatovano)" /></td>
+                    </tr>
+                    <tr>
+                        <td><label for="Rizeni_Datum">Datum ukončení řízení:</label></td>
+                        <td><input class="form-control" type="date" name="Rizeni_Datum" value="@(_zaznam.Rizeni.DatumFormatovano)" /></td>
+                    </tr>
+                    <tr>
+                        <td><label for="Rizeni_DatVystaveno">Datum vystavení:</label></td>
+                        <td><input class="form-control" type="date" name="Rizeni_DatVystaveno" value="@(_zaznam.Rizeni.DatVystavenoFormatovano)" /></td>
+                    </tr>
+                    <tr>
+                        <td><label for="Rizeni_Stav">Stav:</label></td>
+                        <td>
+                            <select class="form-control" name="Rizeni_Stav">
+                                @{
+                                    List<CisStav> _stavy = await DatabaseHandler.LoadStavy();
+
+                                    foreach (CisStav cs in _stavy)
+                                    {
+                                        if (_zaznam.Rizeni.Stav == cs.Kod)
+                                        {
+                                            <option value="@(cs.Kod)" selected>@(cs.Name)</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@(cs.Kod)">@(cs.Name)</option>
+                                        }
+                                    }
+                                }
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2">Ostatní</td>
+                    </tr>
+                    <tr>
+                        <td><label for="Organizace">Organizace:</label></td>
+                        <td>
+                            <select class="form-control" name="Organizace">
+                                @{
+                                    List<Organizace> _organizace = await DatabaseHandler.LoadOrganizace();
+
+                                    foreach (Organizace o in _organizace)
+                                    {
+                                        if (_zaznam.Obcan.OrganizaceCislo == o.CisOrp)
+                                        {
+                                            <option value="@(o.CisOrp)" selected>@(o.Name) (@(o.SidloNazev))</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@(o.CisOrp)">@(o.Name) (@(o.SidloNazev))</option>
+                                        }
+                                    }
+                                }
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><label for="ZmenaAutor">Jméno autora:</label></td>
+                        <td><input class="form-control" type="text" name="ZmenaAutor" value="@(_zaznam.ZmenaAutor)" /></td>
+                    </tr>
+                    <tr>
+                        <td><label for="ZmenaDatum">Datum poslední úpravy:</label></td>
+                        <td><input class="form-control" type="text" name="ZmenaDatum" value="@(_zaznam.ZmenaDatum)" disabled /></td>
+                    </tr>
+                    <tr>
+                        <td colspan="2"><input class="form-control" type="submit" value="Uložit" /></td>
+                    </tr>
+                </table>
+            </form>
+        </div>
+        <div class="col-md-2"></div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        //Don't touch this, it's sorting the Podniky names and it works nice
+        $(function () {
+        const ulist = document.querySelector("#refdocs_list ul");
+
+        //escapes random chars
+        function escapeRegex(text) {
+        return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        //sorts the objects
+        function customSort(arr) {
+        return arr.sort((a, b) => a.localeCompare(b));
+        }
+
+
+        function renderFilteredList(filtered, search) {
+        ulist.innerHTML = "";
+        const regex = new RegExp(escapeRegex(search), 'gi');
+        filtered.forEach(name => {
+        const li = document.createElement("li");
+        li.innerHTML = name.replace(regex, match => `<mark>${match}</mark>`);
+        li.setAttribute("data-raw", name);
+        ulist.appendChild(li);
+        });
+        }
+
+        $('#refdocs').on('keyup', function () {
+        const search = $(this).val().trim();
+
+        //only activates with 3+ letters, change if wanted
+        if (search.length >= 3) {
+        const filtered = podnikListJson.filter(name =>
+        name.toLowerCase().includes(search.toLowerCase())
+        );
+        const sorted = customSort(filtered);
+        renderFilteredList(sorted, search);
+        } else {
+        ulist.innerHTML = "";
+        }
+        });
+            $('#refdocs_list').on('click', 'ul li', function () {
+            $('#refdocs_list ul li').removeClass('selected');
+            $(this).addClass('selected');
+            $('#refdocs').val($(this).data('raw'));
+            });
+            });
+    </script>
+
+    <script>
+        //loads podnik names from DB
+        const podnikListJson = JSON.parse('@Html.Raw(System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(System.Text.Json.JsonSerializer.Serialize(DatabaseHandler.LoadPodnikNames().GetAwaiter().GetResult())))');
+    </script>
+</div>

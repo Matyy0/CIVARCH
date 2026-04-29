@@ -1,0 +1,425 @@
+@page
+@model CIVARCH.Pages.IndexModel
+@{
+    ViewData["Title"] = AppConfig.AppName;
+
+    string searchQuery = " ";
+    if (Request.Query["SearchQuery"].Count == 1)
+        searchQuery = Request.Query["SearchQuery"];
+
+    int? sortCol = Model.SortByColumn;
+    string sortRequest = Request.Query["SortBy"].ToString();
+    if (sortCol == null && !string.IsNullOrEmpty(sortRequest))
+        sortCol = Convert.ToInt32(sortRequest);
+
+    string sortby = sortCol switch
+    {
+        0 => "OBCAN_Jmeno",
+        1 => "OBCAN_Prijmeni",
+        2 => "OBCAN_RC",
+        3 => "OBCAN_Id",
+        _ => "OBCAN_Id"
+    };
+
+    int celkovyPocet    = await DatabaseHandler.LoadObcaneCount(searchQuery);
+    int strankaAktualni = 1;
+    if (Request.Query["Page"].Count == 1)
+        strankaAktualni = Convert.ToInt32(Request.Query["Page"]);
+    int strankaDalsi   = strankaAktualni + 1;
+    int strankaPosledni = (int)(celkovyPocet / AppConfig.TableRowsCount) + 1;
+
+    List<Obcan> Obcane = await DatabaseHandler.LoadObcaneListQuery(
+        (strankaAktualni - 1) * AppConfig.TableRowsCount + 1,
+        strankaAktualni * AppConfig.TableRowsCount,
+        searchQuery, sortby);
+
+    List<CisStav> Stavy = await DatabaseHandler.LoadStavy();
+
+    string sq       = searchQuery?.Trim() ?? "";
+    string pageBase = $"?SearchQuery={sq}&SortBy={sortCol}";
+
+    string podnikListJson = System.Text.Json.JsonSerializer.Serialize(
+        DatabaseHandler.LoadPodnikNames().GetAwaiter().GetResult());
+}
+
+@* ══ CHYBOVÉ HLÁŠENÍ Z MAZÁNÍ ══ *@
+@if (Model.DeleteError != null)
+{
+    <div class="ci-alert-error" id="deleteErrorAlert">
+        &#9888; @Model.DeleteError
+        <button type="button" onclick="this.parentElement.remove()" class="ci-alert-close">&#10005;</button>
+    </div>
+}
+
+@* ══ MODAL: SMAZAT ZÁZNAM ══ *@
+<div id="deleteModal" class="ci-modal-backdrop" style="display:none" onclick="if(event.target===this)closeDeleteModal()">
+    <div class="ci-modal-box">
+        <div class="ci-modal-header">
+            <span class="ci-modal-icon">&#9888;</span>
+            <h5 class="ci-modal-title">Smazat záznam</h5>
+        </div>
+        <p class="ci-modal-body">Opravdu chcete smazat tento záznam? Tuto akci nelze vrátit zpět.</p>
+        <form method="post" action="/?handler=DeleteObcan" class="ci-modal-actions">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id"          id="deleteId" />
+            <input type="hidden" name="sortby"      id="sortbyInput" />
+            <input type="hidden" name="returnUrl"   id="returnUrlInput" />
+            <input type="hidden" name="searchQuery" id="searchInput" />
+            <button type="button" class="btn ci-btn-ghost" onclick="closeDeleteModal()">Zrušit</button>
+            <button type="submit" class="btn ci-btn-danger">Smazat</button>
+        </form>
+    </div>
+</div>
+
+@* ══ MODAL: DETAIL ZÁZNAMU ══ *@
+<div id="detailModal" class="ci-modal-backdrop ci-modal-wide" style="display:none" onclick="if(event.target===this)closeDetailModal()">
+    <div class="ci-modal-box" style="max-width:640px; width:100%">
+        <div class="ci-modal-header" style="justify-content:space-between">
+            <h5 class="ci-modal-title" id="detailModalTitle">Detail záznamu</h5>
+            <button type="button" class="ci-btn-ghost" style="padding:.2rem .6rem" onclick="closeDetailModal()">&#10005;</button>
+        </div>
+        <div id="detailModalBody" class="ci-detail-body">
+            <div class="ci-detail-loading">Načítám…</div>
+        </div>
+        <div class="ci-modal-actions" style="margin-top:1rem">
+            <button type="button" class="btn ci-btn-ghost" onclick="closeDetailModal()">Zavřít</button>
+            <button type="button" class="btn ci-btn-export" id="detailExportBtn" style="display:none" onclick="exportDetail()">&#8659; Exportovat CSV</button>
+        </div>
+    </div>
+</div>
+
+@* ══ MODAL: NOVÝ ZÁZNAM ══ *@
+<div id="novyModal" class="ci-modal-backdrop ci-modal-wide" style="display:none" onclick="if(event.target===this)closeNovyModal()">
+    <div class="ci-modal-box" style="max-width:700px; width:100%; max-height:90vh; overflow-y:auto">
+        <div class="ci-modal-header" style="justify-content:space-between; position:sticky; top:0; background:#fff; z-index:1; padding-bottom:.75rem; border-bottom:1px solid #e2e8f0; margin-bottom:1rem">
+            <h5 class="ci-modal-title">Nový záznam</h5>
+            <button type="button" class="ci-btn-ghost" style="padding:.2rem .6rem" onclick="closeNovyModal()">&#10005;</button>
+        </div>
+
+        <div id="novyModalMsg" style="display:none; margin-bottom:1rem"></div>
+
+        <form id="novyZaznamForm" method="post" action="/?handler=NovyZaznam">
+            @Html.AntiForgeryToken()
+
+            <div class="ci-form-section">Osobní údaje</div>
+            <div class="ci-form-grid">
+                <div class="ci-fg"><label>Příjmení *</label><input class="form-control" name="nz_Prijmeni" required /></div>
+                <div class="ci-fg"><label>Jméno *</label><input class="form-control" name="nz_Jmeno" required /></div>
+                <div class="ci-fg"><label>Titul</label><input class="form-control" name="nz_Titul" /></div>
+                <div class="ci-fg"><label>Rodné příjmení</label><input class="form-control" name="nz_RodneJm" /></div>
+                <div class="ci-fg"><label>Rodné číslo *</label><input class="form-control" name="nz_RC" required /></div>
+            </div>
+
+            <div class="ci-form-section">Kontaktní adresa</div>
+            <div class="ci-form-grid">
+                <div class="ci-fg"><label>Ulice *</label><input class="form-control" name="nz_Adresa_Ulice" required /></div>
+                <div class="ci-fg"><label>Číslo popisné *</label><input class="form-control" name="nz_Adresa_CP" required /></div>
+                <div class="ci-fg"><label>Obec *</label><input class="form-control" name="nz_Adresa_Obec" required /></div>
+                <div class="ci-fg"><label>PSČ *</label><input class="form-control" name="nz_Adresa_PSC" required /></div>
+            </div>
+
+            <div class="ci-form-section">Řízení</div>
+            <div class="ci-form-grid">
+                <div class="ci-fg ci-fg-wide">
+                    <label>Podnik *</label>
+                    <div id="refdocs_main">
+                        <div id="refdocs_input"><input id="refdocs" name="nz_Rizeni_Podnik" required /></div>
+                        <div id="refdocs_wrapper"><div id="refdocs_list"><ul></ul></div></div>
+                    </div>
+                </div>
+                <div class="ci-fg"><label>Datum nástupu 1 *</label><input class="form-control" type="date" name="nz_Rizeni_DatNastupu1" required /></div>
+                <div class="ci-fg"><label>Datum nástupu 2</label><input class="form-control" type="date" name="nz_Rizeni_DatNastupu2" /></div>
+                <div class="ci-fg"><label>Datum ukončení</label><input class="form-control" type="date" name="nz_Rizeni_Datum" /></div>
+                <div class="ci-fg"><label>Datum vystavení</label><input class="form-control" type="date" name="nz_Rizeni_DatVystaveno" /></div>
+                <div class="ci-fg">
+                    <label>Stav *</label>
+                    <select class="form-control" name="nz_Rizeni_Stav">
+                        @foreach (CisStav cs in Stavy)
+                        {
+                            <option value="@cs.Kod">@cs.Name</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <div class="ci-modal-actions" style="margin-top:1.5rem; position:sticky; bottom:0; background:#fff; padding-top:.75rem; border-top:1px solid #e2e8f0">
+                <button type="button" class="btn ci-btn-ghost" onclick="closeNovyModal()">Zrušit</button>
+                <button type="submit" class="btn ci-btn-search" id="novySubmitBtn">Uložit záznam</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@* ══ TOOLBAR ══ *@
+<div class="ci-toolbar">
+    <form method="get" action="" class="ci-search-form">
+        <input class="ci-search-input" type="text" name="SearchQuery"
+               placeholder="&#128269; Hledat (lze bez diakritiky)…"
+               value="@sq" />
+        <input type="hidden" name="SortBy" value="@sortCol" />
+        <button class="btn ci-btn-search" type="submit">Hledat</button>
+        @if (!string.IsNullOrWhiteSpace(sq))
+        {
+            <a class="ci-btn-clear" href="?SortBy=@sortCol">&#10005; Zrušit filtr</a>
+        }
+    </form>
+    <div class="ci-toolbar-right">
+        @if (!string.IsNullOrWhiteSpace(sq))
+        {
+            <span class="ci-result-count">@celkovyPocet výsledků</span>
+        }
+        <button type="button" class="btn ci-btn-search" onclick="openNovyModal()" style="white-space:nowrap">+ Nový záznam</button>
+    </div>
+</div>
+
+@* ══ PAGINACE ══ *@
+<div class="ci-pagination-bar">
+    <div class="ci-pager">
+        @if (strankaAktualni > 1)
+        {
+            <button class="ci-page-btn" type="button" onclick="location.href='@(pageBase)&Page=1'" title="První">&#171;</button>
+            <button class="ci-page-btn" type="button" onclick="location.href='@(pageBase)&Page=@(strankaAktualni-1)'" title="Předchozí">&#8249;</button>
+        }
+        else
+        {
+            <button class="ci-page-btn" disabled>&#171;</button>
+            <button class="ci-page-btn" disabled>&#8249;</button>
+        }
+        <span class="ci-page-info">Stránka <strong>@strankaAktualni</strong> z <strong>@strankaPosledni</strong></span>
+        @if (strankaAktualni < strankaPosledni)
+        {
+            <button class="ci-page-btn" type="button" onclick="location.href='@(pageBase)&Page=@(strankaDalsi)'" title="Další">&#8250;</button>
+            <button class="ci-page-btn" type="button" onclick="location.href='@(pageBase)&Page=@(strankaPosledni)'" title="Poslední">&#187;</button>
+        }
+        else
+        {
+            <button class="ci-page-btn" disabled>&#8250;</button>
+            <button class="ci-page-btn" disabled>&#187;</button>
+        }
+    </div>
+    <div class="ci-page-jump">
+        <form method="get" action="" id="GoToPageForm">
+            <label for="pageJump">Přejít na:</label>
+            <select id="pageJump" class="ci-page-select" name="Page" onchange="document.getElementById('GoToPageForm').submit()">
+                @for (int i = 1; i <= strankaPosledni; i++)
+                {
+                    if (i == strankaAktualni) { <option value="@i" selected>@i</option> }
+                    else { <option value="@i">@i</option> }
+                }
+            </select>
+            <input type="hidden" name="SearchQuery" value="@sq" />
+            <input type="hidden" name="SortBy" value="@sortCol" />
+        </form>
+    </div>
+</div>
+
+@* ══ TABULKA ══ *@
+<form method="post" action="" id="exportForm">
+@Html.AntiForgeryToken()
+<div class="ci-table-wrap">
+    <table class="ci-table" id="tabulkaObcanu">
+        <thead>
+            <tr>
+                <th class="ci-th-check"></th>
+                @if (AppConfig.TableDisplayId)
+                {
+                    <th class="ci-th ci-sortable" onclick="navSort(3)">ID @(sortCol == 3 ? "▲" : "")</th>
+                }
+                <th class="ci-th">Titul</th>
+                <th class="ci-th ci-sortable" onclick="navSort(0)">Jméno @(sortCol == 0 ? "▲" : "")</th>
+                <th class="ci-th ci-sortable" onclick="navSort(1)">Příjmení @(sortCol == 1 ? "▲" : "")</th>
+                <th class="ci-th ci-sortable" onclick="navSort(2)">Rodné číslo @(sortCol == 2 ? "▲" : "")</th>
+                <th class="ci-th">Datum nar.</th>
+                <th class="ci-th">Adresa</th>
+                <th class="ci-th ci-th-actions">Akce</th>
+            </tr>
+        </thead>
+        <tbody>
+        @{
+            async Task CreateTableRow(Obcan _obcan)
+            {
+                if (_obcan == null) return;
+                string prijmeniText = (_obcan.RodneJm != "" && _obcan.RodneJm != _obcan.Prijmeni)
+                    ? $"{_obcan.Prijmeni} ({_obcan.RodneJm})"
+                    : _obcan.Prijmeni;
+
+                <tr id="Zaznam_@_obcan.Id" class="ci-row">
+                    <td class="ci-td-check">
+                        <input type="checkbox" class="ci-checkbox" name="ExportId" value="@_obcan.Id" />
+                    </td>
+                    @if (AppConfig.TableDisplayId)
+                    {
+                        <td class="ci-td ci-id">@_obcan.Id</td>
+                    }
+                    <td class="ci-td ci-titul">@_obcan.Titul</td>
+                    <td class="ci-td"><strong>@_obcan.Jmeno</strong></td>
+                    <td class="ci-td">@prijmeniText</td>
+                    <td class="ci-td ci-rc">@_obcan.RC</td>
+                    <td class="ci-td ci-date">@_obcan.DatumNarozeni</td>
+                    <td class="ci-td ci-adresa">@(_obcan.Adresa?.ToString() ?? "–")</td>
+                    <td class="ci-td-actions">
+                        <button class="btn ci-btn-view" type="button"
+                                onclick="openDetailModal(@_obcan.Id)"
+                                title="Zobrazit detail">&#128065; Detail</button>
+                        <button class="btn ci-btn-edit" type="button"
+                                onclick="location.href='UpravitZaznam?Id=@_obcan.Id'"
+                                title="Upravit záznam">&#9998; Upravit</button>
+                        <button class="btn ci-btn-del" type="button"
+                                onclick="openDeleteModal(@_obcan.Id)"
+                                title="Smazat záznam">&#128465; Smazat</button>
+                    </td>
+                </tr>
+            }
+
+            if (Obcane == null || Obcane.Count == 0)
+            {
+                <tr><td colspan="10" class="ci-empty">Žádné záznamy nenalezeny.</td></tr>
+            }
+            else
+            {
+                foreach (var o in Obcane) { await CreateTableRow(o); }
+            }
+        }
+        </tbody>
+    </table>
+</div>
+<div class="ci-export-bar">
+    <button class="btn ci-btn-export" type="submit" form="exportForm">&#8659; Exportovat vybrané do CSV</button>
+    <span class="ci-export-hint">Zaškrtněte záznamy a klikněte Exportovat.</span>
+</div>
+</form>
+
+<script>
+    // ── Navigace a řazení ──
+    function navSort(col) {
+        location.href = `?SearchQuery=@sq&SortBy=${col}&Page=1`;
+    }
+
+    // ── DELETE MODAL ──
+    function openDeleteModal(id) {
+        document.getElementById("deleteId").value = id;
+        const params = new URLSearchParams(window.location.search);
+        document.getElementById("sortbyInput").value   = params.get("SortBy") ?? "";
+        document.getElementById("searchInput").value   = params.get("SearchQuery") ?? "";
+        document.getElementById("returnUrlInput").value = window.location.pathname + window.location.search;
+        document.getElementById("deleteModal").style.display = "flex";
+    }
+    function closeDeleteModal() { document.getElementById("deleteModal").style.display = "none"; }
+
+    // ── DETAIL MODAL ──
+    let currentDetailId = null;
+
+    async function openDetailModal(id) {
+        currentDetailId = id;
+        document.getElementById("detailModal").style.display = "flex";
+        document.getElementById("detailModalBody").innerHTML = '<div class="ci-detail-loading">Načítám…</div>';
+        document.getElementById("detailExportBtn").style.display = "none";
+
+        const resp = await fetch(`/?handler=Detail&id=${id}`);
+        if (!resp.ok) { document.getElementById("detailModalBody").innerHTML = "<p>Chyba při načítání.</p>"; return; }
+        const d = await resp.json();
+        if (!d.ok)  { document.getElementById("detailModalBody").innerHTML = `<p>${d.error}</p>`; return; }
+
+        document.getElementById("detailModalTitle").textContent =
+            [d.titul, d.jmeno, d.prijmeni].filter(Boolean).join(" ");
+
+        document.getElementById("detailModalBody").innerHTML = `
+            <div class="ci-detail-section">Osobní údaje</div>
+            <table class="ci-detail-table">
+                <tr><td>Jméno</td><td><strong>${d.jmeno} ${d.prijmeni}</strong></td></tr>
+                ${d.titul ? `<tr><td>Titul</td><td>${d.titul}</td></tr>` : ""}
+                ${d.rodneJm && d.rodneJm !== d.prijmeni ? `<tr><td>Rodné příjmení</td><td>${d.rodneJm}</td></tr>` : ""}
+                <tr><td>Rodné číslo</td><td><code>${d.rc}</code></td></tr>
+                <tr><td>Datum narození</td><td>${d.datumNarozeni}</td></tr>
+                <tr><td>Adresa</td><td>${d.adresa}</td></tr>
+            </table>
+            <div class="ci-detail-section">Řízení</div>
+            <table class="ci-detail-table">
+                <tr><td>Organizace</td><td>${d.organizace}</td></tr>
+                <tr><td>Podnik</td><td>${d.podnikNazev1}${d.podnikNazev2 ? " / " + d.podnikNazev2 : ""}</td></tr>
+                <tr><td>Datum nástupu 1</td><td>${d.datNastupu1}</td></tr>
+                ${d.datNastupu2 ? `<tr><td>Datum nástupu 2</td><td>${d.datNastupu2}</td></tr>` : ""}
+                ${d.datum ? `<tr><td>Datum ukončení</td><td>${d.datum}</td></tr>` : ""}
+                ${d.datVystaveno ? `<tr><td>Datum vystavení</td><td>${d.datVystaveno}</td></tr>` : ""}
+                <tr><td>Stav</td><td>${d.stav}</td></tr>
+            </table>
+            <div class="ci-detail-section">Ostatní</div>
+            <table class="ci-detail-table">
+                <tr><td>Datum změny</td><td>${d.zmenaDatum}</td></tr>
+                <tr><td>Autor změny</td><td>${d.zmenaAutor}</td></tr>
+            </table>`;
+
+        document.getElementById("detailExportBtn").style.display = "inline-flex";
+    }
+
+    function closeDetailModal() {
+        document.getElementById("detailModal").style.display = "none";
+        currentDetailId = null;
+    }
+
+    function exportDetail() {
+        if (currentDetailId) window.open(`Zaznam?Id=${currentDetailId}`, "_blank");
+    }
+
+    // ── NOVÝ ZÁZNAM MODAL ──
+    function openNovyModal()  { document.getElementById("novyModal").style.display = "flex"; }
+    function closeNovyModal() { document.getElementById("novyModal").style.display = "none"; }
+
+    document.getElementById("novyZaznamForm").addEventListener("submit", async function(e) {
+        e.preventDefault();
+        const btn = document.getElementById("novySubmitBtn");
+        btn.disabled = true; btn.textContent = "Ukládám…";
+
+        const resp = await fetch("/?handler=NovyZaznam", {
+            method: "POST",
+            body: new FormData(this)
+        });
+        const d = await resp.json();
+        const msgEl = document.getElementById("novyModalMsg");
+
+        if (d.ok) {
+            msgEl.className = "ci-alert-success";
+            msgEl.textContent = "Záznam byl úspěšně uložen.";
+            msgEl.style.display = "block";
+            this.reset();
+            setTimeout(() => { closeNovyModal(); location.reload(); }, 1500);
+        } else {
+            msgEl.className = "ci-alert-error";
+            msgEl.textContent = d.error || "Chyba při ukládání.";
+            msgEl.style.display = "block";
+        }
+        btn.disabled = false; btn.textContent = "Uložit záznam";
+    });
+
+    // ── PODNIK AUTOCOMPLETE ──
+    const podnikListJson = @Html.Raw(podnikListJson);
+
+    (function() {
+        const ulist = document.querySelector("#refdocs_list ul");
+        function escapeRegex(t) { return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+        function renderList(filtered, search) {
+            ulist.innerHTML = "";
+            const re = new RegExp(escapeRegex(search), 'gi');
+            filtered.forEach(name => {
+                const li = document.createElement("li");
+                li.innerHTML = name.replace(re, m => `<mark>${m}</mark>`);
+                li.dataset.raw = name;
+                ulist.appendChild(li);
+            });
+        }
+        document.getElementById("refdocs").addEventListener("keyup", function() {
+            const s = this.value.trim();
+            if (s.length >= 3) {
+                renderList(podnikListJson.filter(n => n.toLowerCase().includes(s.toLowerCase())).sort((a,b)=>a.localeCompare(b)), s);
+            } else { ulist.innerHTML = ""; }
+        });
+        ulist.addEventListener("click", function(e) {
+            const li = e.target.closest("li");
+            if (!li) return;
+            ulist.querySelectorAll("li").forEach(l => l.classList.remove("selected"));
+            li.classList.add("selected");
+            document.getElementById("refdocs").value = li.dataset.raw;
+            ulist.innerHTML = "";
+        });
+    })();
+</script>

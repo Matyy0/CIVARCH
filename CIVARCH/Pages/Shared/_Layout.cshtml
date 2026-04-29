@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] – @AppConfig.AppName</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/CIVARCH.styles.css" asp-append-version="true" />
+</head>
+<body>
+    <header>
+        <nav class="civarch-navbar">
+            <a class="civarch-navbar-main" asp-area="" asp-page="/Index">CIVARCH</a>
+
+            <div>
+                <ul>
+                    <li><a asp-area="" asp-page="/NovyZaznam">+ Nový záznam</a></li>
+                    <li><a asp-area="" asp-page="/NovyPodnik">+ Nový podnik</a></li>
+                    @if (AppConfig.EnableHromadnyExport)
+                    {
+                        <li><a asp-area="" asp-page="/HromadnyExport">&#8659; Export</a></li>
+                    }
+                    @if (User.Identity?.IsAuthenticated == true)
+                    {
+                        <li><span class="ci-nav-sep"></span></li>
+                        <li><span class="ci-nav-user">&#128100; @User.Identity.Name</span></li>
+                        <li>
+                            <form method="post" action="/Login?handler=Logout" style="margin:0">
+                                <button type="submit" class="ci-nav-logout">Odhlásit</button>
+                            </form>
+                        </li>
+                    }
+                </ul>
+            </div>
+        </nav>
+    </header>
+
+    <main role="main">
+        @RenderBody()
+    </main>
+
+    <footer class="civarch-footer">
+        &copy; @DateTime.Now.Year – @AppConfig.AppName
+    </footer>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

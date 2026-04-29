@@ -1,0 +1,119 @@
+﻿@page
+@model CIVARCH.Pages.ZaznamModel
+@{
+    // nacteni id z url
+    string id = "1";
+
+    if (Request.Query["Id"] != "")
+    {                                          
+        id = Request.Query["Id"];
+    }
+
+
+    // nacteni zaznamu jako takoveho
+    Zaznam _zaznam = await DatabaseHandler.LoadSingleZaznamById(id);
+
+    ViewData["Title"] = DataHandler.CreateFullName(_zaznam.Obcan.Jmeno, _zaznam.Obcan.Prijmeni, _zaznam.Obcan.Titul) + " - " + AppConfig.AppName;
+    Layout = "_LayoutSingleZaznam";
+}
+<div>
+    <table border="1" class="table table-striped" id="tabulkaObcana">
+        <thead>
+            <tr>
+                <th class="text-center" colspan="2"><h2>@(DataHandler.CreateFullName(_zaznam.Obcan.Jmeno, _zaznam.Obcan.Prijmeni, _zaznam.Obcan.Titul))</h2></th>
+            </tr>
+        </thead>
+        <tr>
+            <td class="text-center" colspan="2"><h5><u>Osobní údaje</u></h5></td>
+        </tr>
+        <tr>
+            <td>Titul</td>
+            <td>@(_zaznam.Obcan.Titul)</td>
+        </tr>
+        <tr>
+            <td>Jméno</td>
+            <td>@(_zaznam.Obcan.Jmeno)</td>
+        </tr>
+        <tr>
+            <td>Příjmení</td>
+            <td>@(_zaznam.Obcan.Prijmeni)</td>
+        </tr>
+        <tr>
+            <td>Rodné příjmení</td>
+            <td>@(_zaznam.Obcan.RodneJm)</td>
+        </tr>
+        <tr>
+            <td>Rodné číslo</td>
+            <td>@(_zaznam.Obcan.RC)</td>
+        </tr>
+        <tr>
+            <td>Datum narození</td>
+            <td>@(_zaznam.Obcan.DatumNarozeni)</td>
+        </tr>
+        <tr>
+            <td>Adresa bydliště</td>
+            @{
+                if(_zaznam.Obcan.Adresa != null)
+                {
+                    <td>@(_zaznam.Obcan.Adresa.ToString())</td>
+                }
+                else
+                {
+                    <td>-</td>
+                }
+            }
+        </tr>
+        <tr>
+            <td class="text-center" colspan="2"><h5><u>Řízení</u></h5></td>
+        </tr>
+        <tr>
+            <td>Datum počátku výkonu CS</td>
+            <td>@(_zaznam.Rizeni.DatNastupu1)</td>
+        </tr>
+        <tr>
+            <td>Datum ukončení výkonu CS</td>
+            <td>(@_zaznam.Rizeni.Datum)</td>
+        </tr>
+        <tr>
+            <td>Datum vystavení</td>
+            <td>(@_zaznam.Rizeni.DatVystaveno)</td>
+        </tr>
+        <tr>
+            <td>Organizace</td>
+            <td>(@_zaznam.Organizace)</td>
+        </tr>
+        <tr>
+            <td>Stav</td>
+            <td>(@_zaznam.Rizeni.Stav)</td>
+        </tr>
+        <tr>
+            <td class="text-center" colspan="2"><h5><u>Podnik</u></h5></td>
+        </tr>
+        <tr>
+            <td>Název podniku 1</td>
+            <td>(@_zaznam.Obcan.PodnikNazev1)</td>
+        </tr>
+        <tr>
+            <td>Název podniku 2</td>
+            <td>(@_zaznam.Obcan.PodnikNazev2)</td>
+        </tr>
+        <tr>
+            <td class="text-center" colspan="2"><h5><u>Ostatní</u></h5></td>
+        </tr>
+        <tr>
+            <td>Datum změny</td>
+            <td>(@_zaznam.ZmenaDatum)</td>
+        </tr>
+        <tr>
+            <td>Autor změny</td>
+            <td>(@_zaznam.ZmenaAutor)</td>
+        </tr>
+        <tr>
+            <td class="text-center" colspan="2">
+                <form method="post">
+                    <input type="submit" class="btn btn-primary" value="Exportovat" />
+                </form>
+            </td>
+        </tr>
+    </table>
+</div>

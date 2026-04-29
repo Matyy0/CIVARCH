@@ -1,0 +1,23 @@
+﻿@page
+@model CIVARCH.Pages.HromadnyExportModel
+@{
+    ViewData["Title"] = "Hromadný export - " + AppConfig.AppName;
+
+    int celkovyPocet = await DatabaseHandler.LoadObcaneCount("");
+}
+<div class="civarch-zaznam">
+    <h1 class="text-center" style="margin-bottom: 1rem">Hromadný export dat </h1>
+    
+    <div class="col-5"></div>
+    
+    <div class="col">
+        <form action="" method="post">
+            <input class="form-control" style="margin-bottom: 0.5rem" type="text" name="Start" />
+            <input class="form-control" type="submit" value="Exportovat" />
+        </form>
+        <label>TIP: vyhledávání probíhá stejně jak na hlavní stránce, např: "Karel" exportuje všechny lidi s jménem Karel</label>
+    </div>
+    
+    <div class="col-5"></div>
+    
+</div>
