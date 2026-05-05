@@ -1,23 +1,80 @@
-﻿@page
+@page
 @model CIVARCH.Pages.HromadnyExportModel
 @{
-    ViewData["Title"] = "Hromadný export - " + AppConfig.AppName;
-
+    ViewData["Title"] = "Hromadný export – " + AppConfig.AppName;
     int celkovyPocet = await DatabaseHandler.LoadObcaneCount("");
 }
-<div class="civarch-zaznam">
-    <h1 class="text-center" style="margin-bottom: 1rem">Hromadný export dat </h1>
-    
-    <div class="col-5"></div>
-    
-    <div class="col">
-        <form action="" method="post">
-            <input class="form-control" style="margin-bottom: 0.5rem" type="text" name="Start" />
-            <input class="form-control" type="submit" value="Exportovat" />
-        </form>
-        <label>TIP: vyhledávání probíhá stejně jak na hlavní stránce, např: "Karel" exportuje všechny lidi s jménem Karel</label>
-    </div>
-    
-    <div class="col-5"></div>
-    
+
+<div style="max-width:520px; margin:2rem auto">
+    <h4 style="margin-bottom:1.5rem; color:#1e3a8a">Hromadný export dat</h4>
+
+    <div id="exportMsg" style="display:none; margin-bottom:1rem"></div>
+
+    <form id="hromadnyForm" method="post">
+        @Html.AntiForgeryToken()
+        <div class="ci-fg" style="margin-bottom:1rem">
+            <label style="font-weight:600; margin-bottom:.35rem; display:block">
+                Filtr (nepovinné)
+            </label>
+            <input class="form-control" type="text" name="Start"
+                   placeholder="např. Karel, 1970, Praha…" />
+            <small style="color:#64748b; margin-top:.35rem; display:block">
+                Prázdné pole = exportovat všechny záznamy (@celkovyPocet celkem).
+                Vyhledávání funguje stejně jako na hlavní stránce.
+            </small>
+        </div>
+        <button id="exportBtn" type="submit" class="btn ci-btn-export" style="width:100%">
+            &#8659; Exportovat do CSV
+        </button>
+    </form>
 </div>
+
+<script>
+document.getElementById("hromadnyForm").addEventListener("submit", async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById("exportBtn");
+    const msgEl = document.getElementById("exportMsg");
+    btn.disabled = true;
+    btn.textContent = "Exportuji…";
+    msgEl.style.display = "none";
+
+    try {
+        const resp = await fetch("", { method: "POST", body: new FormData(this) });
+
+        if (resp.headers.get("content-type")?.includes("text/csv")) {
+            const blob = await resp.blob();
+            if (blob.size === 0) {
+                msgEl.className = "ci-alert-error";
+                msgEl.textContent = "Export vrátil prázdný soubor.";
+                msgEl.style.display = "block";
+            } else {
+                const disposition = resp.headers.get("content-disposition") ?? "";
+                const fnMatch = disposition.match(/filename[^;=\n]*=["']?([^"';\n]+)["']?/i);
+                const fname = fnMatch ? fnMatch[1] : "hromadny_export.csv";
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url; a.download = fname;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                msgEl.className = "ci-alert-success";
+                msgEl.textContent = `Staženo: ${fname}`;
+                msgEl.style.display = "block";
+            }
+        } else {
+            const d = await resp.json().catch(() => ({ error: "Neznámá chyba serveru." }));
+            msgEl.className = "ci-alert-error";
+            msgEl.textContent = d.error ?? "Chyba exportu.";
+            msgEl.style.display = "block";
+        }
+    } catch(ex) {
+        msgEl.className = "ci-alert-error";
+        msgEl.textContent = "Chyba: " + ex.message;
+        msgEl.style.display = "block";
+    }
+
+    btn.disabled = false;
+    btn.textContent = "↙ Exportovat do CSV";
+});
+</script>

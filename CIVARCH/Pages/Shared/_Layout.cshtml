@@ -7,16 +7,17 @@
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/CIVARCH.styles.css" asp-append-version="true" />
+    <link rel="icon" type="image/png" href="~/images/logo_favicon.png" />
 </head>
 <body>
     <header>
         <nav class="civarch-navbar">
-            <a class="civarch-navbar-main" asp-area="" asp-page="/Index">CIVARCH</a>
+            <a class="civarch-navbar-main" asp-area="" asp-page="/Index">
+                <img src="~/images/logo_transparent.png" alt="Databáze Civilní Služby" class="civarch-logo" />
+            </a>
 
             <div>
                 <ul>
-                    <li><a asp-area="" asp-page="/NovyZaznam">+ Nový záznam</a></li>
-                    <li><a asp-area="" asp-page="/NovyPodnik">+ Nový podnik</a></li>
                     @if (AppConfig.EnableHromadnyExport)
                     {
                         <li><a asp-area="" asp-page="/HromadnyExport">&#8659; Export</a></li>
@@ -26,7 +27,8 @@
                         <li><span class="ci-nav-sep"></span></li>
                         <li><span class="ci-nav-user">&#128100; @User.Identity.Name</span></li>
                         <li>
-                            <form method="post" action="/Login?handler=Logout" style="margin:0">
+                            <form method="post" asp-page="/Login" asp-page-handler="Logout" style="margin:0">
+                                @Html.AntiForgeryToken()
                                 <button type="submit" class="ci-nav-logout">Odhlásit</button>
                             </form>
                         </li>

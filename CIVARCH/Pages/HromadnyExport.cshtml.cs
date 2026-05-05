@@ -1,85 +1,70 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using System.Data;
 using System.Text;
 
 namespace CIVARCH.Pages
 {
+    [Authorize]
     public class HromadnyExportModel : PageModel
     {
-        public void OnGet()
+        public void OnGet() { }
+
+        public async Task<IActionResult> OnPostAsync()
         {
+            string query = Request.Form["Start"].ToString()?.Trim() ?? "";
+
+            List<Obcan> obcane = await DatabaseHandler.LoadObcaneListQuery(0, int.MaxValue, query);
+
+            if (obcane.Count == 0)
+                return new JsonResult(new { ok = false, error = "Å½Ã¡dnÃ© zÃ¡znamy nebyly nalezeny." });
+
+            var bytes = BuildCsv(obcane);
+            string fname = "hromadny_export_" + DateTime.Now.ToString("dd.MM.yyyy-HH-mm-ss") + ".csv";
+            return File(bytes, "text/csv; charset=utf-8", fname);
         }
 
-        /// <summary>
-        /// Export vyhledávaného roèníku
-        /// </summary>
-        /// <returns>Funkce funguje na principu zadání dvouèíslí hledaného roku. Napøíklad vyhledávání roku 1960, staèí zadat 60 a program z Rè vezme první hodnoty a udìlá seznam/// </returns>
-        public async Task<ActionResult> OnPost()
+        private static byte[] BuildCsv(List<Obcan> obcane)
         {
+            const string sep = ";";
+            var sb = new StringBuilder();
 
-            string start = Request.Form["Start"].ToString() ?? "";
-            DataHandler dh = new DataHandler();
-
-            List<Obcan> _obcane = await DatabaseHandler.LoadObcaneListQuery(0, int.MaxValue, start);
-
-            DataTable table = dh.ExportDataToDataTable(_obcane);
-
-            var output = ToCsvByteArray(table, ";");
-
-
-            string filename = "hromadny_export_" + DateTime.Now.ToString("dd.MM.yyyy-HH:mm:ss") + ".csv";
-
-            return new FileContentResult(output, "text/csv")
+            string[] headers =
             {
-                FileDownloadName = filename
+                "ID", "PÅ™Ã­jmenÃ­", "JmÃ©no", "Titul", "RodnÃ© pÅ™Ã­jmenÃ­", "RodnÃ© ÄÃ­slo",
+                "Datum narozenÃ­", "Adresa"
             };
-        }
+            sb.Append(string.Join(sep, headers.Select(h => Esc(h, sep))));
+            sb.Append("\r\n");
 
-        // Metoda pro export do CSV
-        private byte[] ToCsvByteArray(DataTable input, string delimeter = ";")
-        {
-            var stream = new MemoryStream();
-            using (StreamWriter sw = new StreamWriter(stream, Encoding.UTF8)) // Použití UTF-8
+            foreach (var o in obcane)
             {
-                for (int i = 0; i < input.Columns.Count; i++)
+                string[] row =
                 {
-                    sw.Write(input.Columns[i]);
-                    if (i < input.Columns.Count - 1)
-                    {
-                        sw.Write(delimeter);
-                    }
-                }
-                sw.Write(sw.NewLine);
-
-                foreach (DataRow row in input.Rows)
-                {
-                    for (int i = 0; i < input.Columns.Count; i++)
-                    {
-                        if (!Convert.IsDBNull(row[i]))
-                        {
-                            string value = row[i].ToString();
-                            if (value.Contains(delimeter))
-                            {
-                                value = String.Format("\"{0}\"", value);
-                            }
-                            sw.Write(value);
-                        }
-                        else
-                        {
-                            sw.Write(row[i].ToString());
-                        }
-
-                        if (i < input.Columns.Count - 1)
-                        {
-                            sw.Write(delimeter);
-                        }
-                    }
-                    sw.Write(sw.NewLine);
-                }
+                    o.Id.ToString(),
+                    o.Prijmeni ?? "",
+                    o.Jmeno ?? "",
+                    o.Titul ?? "",
+                    o.RodneJm ?? "",
+                    o.RC ?? "",
+                    o.DatumNarozeni ?? "",
+                    o.Adresa?.ToString() ?? ""
+                };
+                sb.Append(string.Join(sep, row.Select(v => Esc(v, sep))));
+                sb.Append("\r\n");
             }
-            return stream.ToArray();
+
+            byte[] bom = { 0xEF, 0xBB, 0xBF };
+            byte[] data = Encoding.UTF8.GetBytes(sb.ToString());
+            byte[] result = new byte[bom.Length + data.Length];
+            bom.CopyTo(result, 0);
+            data.CopyTo(result, bom.Length);
+            return result;
         }
+
+        private static string Esc(string v, string sep) =>
+            (v.Contains(sep) || v.Contains('"') || v.Contains('\n') || v.Contains('\r'))
+                ? '"' + v.Replace("\"", "\"\"") + '"'
+                : v;
     }
 }

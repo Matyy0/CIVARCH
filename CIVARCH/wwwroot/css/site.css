@@ -27,7 +27,7 @@ a { text-decoration: none; color: #2563eb; }
 a:hover { color: #1d4ed8; }
 
 /* === LAYOUT === */
-header        { height: 64px; flex-shrink: 0; }
+header        { height: 72px; flex-shrink: 0; }
 main          { flex-grow: 1; overflow: auto; padding: 0.75rem 1.25rem 2.5rem; }
 .height-100   { height: 100%; }
 .overflow-y-hidden { overflow-y: hidden; }
@@ -41,7 +41,7 @@ main          { flex-grow: 1; overflow: auto; padding: 0.75rem 1.25rem 2.5rem; }
     display: flex;
     align-items: center;
     background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
-    height: 64px;
+    height: 72px;
     padding: 0 1.5rem;
     box-shadow: 0 3px 12px rgba(37,99,235,.30);
     gap: 1rem;
@@ -54,7 +54,14 @@ main          { flex-grow: 1; overflow: auto; padding: 0.75rem 1.25rem 2.5rem; }
     letter-spacing: .06em;
     flex-shrink: 0;
 }
-.civarch-navbar-main:hover { color: #bfdbfe !important; }
+.civarch-navbar-main:hover { opacity: .85; }
+.civarch-logo {
+    height: 60px;
+    width: auto;
+    max-width: 280px;
+    display: block;
+    object-fit: contain;
+}
 
 .civarch-navbar > div {
     display: flex !important;
@@ -110,12 +117,11 @@ main          { flex-grow: 1; overflow: auto; padding: 0.75rem 1.25rem 2.5rem; }
 
 /* === FOOTER === */
 .civarch-footer {
-    position: fixed;
-    bottom: .4rem;
-    left: .9rem;
+    text-align: center;
+    padding: .6rem 1rem;
     font-size: .78rem;
     color: #94a3b8;
-    pointer-events: none;
+    margin-top: 2rem;
 }
 
 
@@ -196,10 +202,6 @@ main          { flex-grow: 1; overflow: auto; padding: 0.75rem 1.25rem 2.5rem; }
     gap: 1.5rem;
     margin-bottom: .5rem;
     flex-wrap: wrap;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    background: #f1f5fb;
     padding: .4rem 0 .4rem;
 }
 
@@ -261,8 +263,9 @@ main          { flex-grow: 1; overflow: auto; padding: 0.75rem 1.25rem 2.5rem; }
     background: #fff;
     border-radius: 12px;
     box-shadow: 0 2px 16px rgba(37,99,235,.09);
-    overflow: hidden;
-    overflow-x: auto;
+    overflow: auto;
+    max-height: calc(100vh - 360px);
+    min-height: 200px;
 }
 
 .ci-table {
@@ -275,6 +278,14 @@ main          { flex-grow: 1; overflow: auto; padding: 0.75rem 1.25rem 2.5rem; }
 .ci-table thead tr {
     background: linear-gradient(90deg, #1e3a8a 0%, #2563eb 100%);
 }
+.ci-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: #1e3a8a;
+}
+.ci-table thead tr th:first-child { border-radius: 12px 0 0 0; }
+.ci-table thead tr th:last-child  { border-radius: 0 12px 0 0; }
 
 .ci-th {
     color: #fff;
@@ -611,6 +622,16 @@ main          { flex-grow: 1; overflow: auto; padding: 0.75rem 1.25rem 2.5rem; }
     box-shadow: 0 8px 40px rgba(37,99,235,.15);
     width: 100%;
     max-width: 420px;
+}
+
+.login-logo-wrap {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+.login-logo {
+    max-width: 320px;
+    width: 100%;
+    height: auto;
 }
 
 .login-title {

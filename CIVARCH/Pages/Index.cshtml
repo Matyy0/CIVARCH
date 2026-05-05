@@ -5,7 +5,7 @@
 
     string searchQuery = " ";
     if (Request.Query["SearchQuery"].Count == 1)
-        searchQuery = Request.Query["SearchQuery"];
+        searchQuery = Request.Query["SearchQuery"].ToString();
 
     int? sortCol = Model.SortByColumn;
     string sortRequest = Request.Query["SortBy"].ToString();
@@ -21,22 +21,28 @@
         _ => "OBCAN_Id"
     };
 
+    int[] pageSizeOptions = { 10, 20, 50, 100, 200, 300 };
+    int pageSize = AppConfig.TableRowsCount;
+    if (Request.Query["PageSize"].Count == 1 && int.TryParse(Request.Query["PageSize"], out int _ps) && pageSizeOptions.Contains(_ps))
+        pageSize = _ps;
+
     int celkovyPocet    = await DatabaseHandler.LoadObcaneCount(searchQuery);
     int strankaAktualni = 1;
     if (Request.Query["Page"].Count == 1)
         strankaAktualni = Convert.ToInt32(Request.Query["Page"]);
-    int strankaDalsi   = strankaAktualni + 1;
-    int strankaPosledni = (int)(celkovyPocet / AppConfig.TableRowsCount) + 1;
+    int strankaDalsi    = strankaAktualni + 1;
+    int strankaPosledni = (int)Math.Ceiling((double)celkovyPocet / pageSize);
+    if (strankaPosledni < 1) strankaPosledni = 1;
 
     List<Obcan> Obcane = await DatabaseHandler.LoadObcaneListQuery(
-        (strankaAktualni - 1) * AppConfig.TableRowsCount + 1,
-        strankaAktualni * AppConfig.TableRowsCount,
+        (strankaAktualni - 1) * pageSize + 1,
+        strankaAktualni * pageSize,
         searchQuery, sortby);
 
     List<CisStav> Stavy = await DatabaseHandler.LoadStavy();
 
     string sq       = searchQuery?.Trim() ?? "";
-    string pageBase = $"?SearchQuery={sq}&SortBy={sortCol}";
+    string pageBase = $"?SearchQuery={sq}&SortBy={sortCol}&PageSize={pageSize}";
 
     string podnikListJson = System.Text.Json.JsonSerializer.Serialize(
         DatabaseHandler.LoadPodnikNames().GetAwaiter().GetResult());
@@ -150,6 +156,102 @@
     </div>
 </div>
 
+@* ══ MODAL: NOVÝ PODNIK ══ *@
+<div id="novyPodnikModal" class="ci-modal-backdrop ci-modal-wide" style="display:none" onclick="if(event.target===this)closeNovyPodnikModal()">
+    <div class="ci-modal-box" style="max-width:600px; width:100%; max-height:90vh; overflow-y:auto">
+        <div class="ci-modal-header" style="justify-content:space-between; position:sticky; top:0; background:#fff; z-index:1; padding-bottom:.75rem; border-bottom:1px solid #e2e8f0; margin-bottom:1rem">
+            <h5 class="ci-modal-title">Nový podnik</h5>
+            <button type="button" class="ci-btn-ghost" style="padding:.2rem .6rem" onclick="closeNovyPodnikModal()">&#10005;</button>
+        </div>
+        <div id="novyPodnikModalMsg" style="display:none; margin-bottom:1rem"></div>
+        <form id="novyPodnikForm" method="post" action="/?handler=NovyPodnik">
+            @Html.AntiForgeryToken()
+            <div class="ci-form-section">Identifikace</div>
+            <div class="ci-form-grid">
+                <div class="ci-fg"><label>OkrOrp</label><input class="form-control" name="np_OkrOrp" /></div>
+                <div class="ci-fg"><label>CisOrp</label><input class="form-control" name="np_CisOrp" /></div>
+                <div class="ci-fg ci-fg-wide"><label>Název organizace *</label><input class="form-control" name="np_OrgNazev1" required /></div>
+            </div>
+            <div class="ci-form-section">Adresa</div>
+            <div class="ci-form-grid">
+                <div class="ci-fg"><label>Ulice</label><input class="form-control" name="np_Ulice" /></div>
+                <div class="ci-fg"><label>Obec</label><input class="form-control" name="np_Obec" /></div>
+                <div class="ci-fg"><label>PSČ</label><input class="form-control" name="np_Psc" /></div>
+            </div>
+            <div class="ci-form-section">Ostatní</div>
+            <div class="ci-form-grid">
+                <div class="ci-fg ci-fg-wide"><label>Předmět činnosti</label><input class="form-control" name="np_PredmetCinn" /></div>
+            </div>
+            <div class="ci-modal-actions" style="margin-top:1.5rem; position:sticky; bottom:0; background:#fff; padding-top:.75rem; border-top:1px solid #e2e8f0">
+                <button type="button" class="btn ci-btn-ghost" onclick="closeNovyPodnikModal()">Zrušit</button>
+                <button type="submit" class="btn ci-btn-search" id="novyPodnikSubmitBtn">Uložit podnik</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@* ══ MODAL: UPRAVIT ZÁZNAM ══ *@
+<div id="editModal" class="ci-modal-backdrop ci-modal-wide" style="display:none" onclick="if(event.target===this)closeEditModal()">
+    <div class="ci-modal-box" style="max-width:700px; width:100%; max-height:90vh; overflow-y:auto">
+        <div class="ci-modal-header" style="justify-content:space-between; position:sticky; top:0; background:#fff; z-index:1; padding-bottom:.75rem; border-bottom:1px solid #e2e8f0; margin-bottom:1rem">
+            <h5 class="ci-modal-title" id="editModalTitle">Upravit záznam</h5>
+            <button type="button" class="ci-btn-ghost" style="padding:.2rem .6rem" onclick="closeEditModal()">&#10005;</button>
+        </div>
+        <div id="editModalMsg" style="display:none; margin-bottom:1rem"></div>
+        <div id="editModalLoading" class="ci-detail-loading">Načítám…</div>
+        <form id="editZaznamForm" method="post" action="/?handler=UpravitZaznam" style="display:none">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="uz_Id" id="uz_Id" />
+
+            <div class="ci-form-section">Osobní údaje</div>
+            <div class="ci-form-grid">
+                <div class="ci-fg"><label>Příjmení *</label><input class="form-control" name="uz_Prijmeni" id="uz_Prijmeni" required /></div>
+                <div class="ci-fg"><label>Jméno *</label><input class="form-control" name="uz_Jmeno" id="uz_Jmeno" required /></div>
+                <div class="ci-fg"><label>Titul</label><input class="form-control" name="uz_Titul" id="uz_Titul" /></div>
+                <div class="ci-fg"><label>Rodné příjmení</label><input class="form-control" name="uz_RodneJm" id="uz_RodneJm" /></div>
+                <div class="ci-fg"><label>Rodné číslo *</label><input class="form-control" name="uz_RC" id="uz_RC" required /></div>
+            </div>
+
+            <div class="ci-form-section">Kontaktní adresa</div>
+            <div class="ci-form-grid">
+                <div class="ci-fg"><label>Ulice</label><input class="form-control" name="uz_Adresa_Ulice" id="uz_Adresa_Ulice" /></div>
+                <div class="ci-fg"><label>Číslo popisné</label><input class="form-control" name="uz_Adresa_CP" id="uz_Adresa_CP" /></div>
+                <div class="ci-fg"><label>Obec</label><input class="form-control" name="uz_Adresa_Obec" id="uz_Adresa_Obec" /></div>
+                <div class="ci-fg"><label>PSČ</label><input class="form-control" name="uz_Adresa_PSC" id="uz_Adresa_PSC" /></div>
+            </div>
+
+            <div class="ci-form-section">Řízení</div>
+            <div class="ci-form-grid">
+                <div class="ci-fg ci-fg-wide">
+                    <label>Podnik *</label>
+                    <div id="refdocs2_main">
+                        <div id="refdocs2_input"><input id="refdocs2" name="uz_Rizeni_Podnik" required /></div>
+                        <div id="refdocs2_wrapper"><div id="refdocs2_list"><ul></ul></div></div>
+                    </div>
+                </div>
+                <div class="ci-fg"><label>Datum nástupu 1</label><input class="form-control" type="date" name="uz_Rizeni_DatNastupu1" id="uz_DatNastupu1" /></div>
+                <div class="ci-fg"><label>Datum nástupu 2</label><input class="form-control" type="date" name="uz_Rizeni_DatNastupu2" id="uz_DatNastupu2" /></div>
+                <div class="ci-fg"><label>Datum ukončení</label><input class="form-control" type="date" name="uz_Rizeni_Datum" id="uz_Datum" /></div>
+                <div class="ci-fg"><label>Datum vystavení</label><input class="form-control" type="date" name="uz_Rizeni_DatVystaveno" id="uz_DatVystaveno" /></div>
+                <div class="ci-fg">
+                    <label>Stav *</label>
+                    <select class="form-control" name="uz_Rizeni_Stav" id="uz_Stav">
+                        @foreach (CisStav cs in Stavy)
+                        {
+                            <option value="@cs.Kod">@cs.Name</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <div class="ci-modal-actions" style="margin-top:1.5rem; position:sticky; bottom:0; background:#fff; padding-top:.75rem; border-top:1px solid #e2e8f0">
+                <button type="button" class="btn ci-btn-ghost" onclick="closeEditModal()">Zrušit</button>
+                <button type="submit" class="btn ci-btn-search" id="editSubmitBtn">Uložit změny</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 @* ══ TOOLBAR ══ *@
 <div class="ci-toolbar">
     <form method="get" action="" class="ci-search-form">
@@ -169,10 +271,11 @@
             <span class="ci-result-count">@celkovyPocet výsledků</span>
         }
         <button type="button" class="btn ci-btn-search" onclick="openNovyModal()" style="white-space:nowrap">+ Nový záznam</button>
+        <button type="button" class="btn ci-btn-edit" onclick="openNovyPodnikModal()" style="white-space:nowrap">+ Nový podnik</button>
     </div>
 </div>
 
-@* ══ PAGINACE ══ *@
+@* ══ PAGINACE (NAHOŘE) ══ *@
 <div class="ci-pagination-bar">
     <div class="ci-pager">
         @if (strankaAktualni > 1)
@@ -209,13 +312,22 @@
             </select>
             <input type="hidden" name="SearchQuery" value="@sq" />
             <input type="hidden" name="SortBy" value="@sortCol" />
+            <input type="hidden" name="PageSize" value="@pageSize" />
         </form>
+    </div>
+    <div class="ci-page-jump">
+        <label for="pageSizeSelect">Záznamů na stránku:</label>
+        <select id="pageSizeSelect" class="ci-page-select" onchange="changePageSize(this.value)">
+            @foreach (var sz in pageSizeOptions)
+            {
+                if (sz == pageSize) { <option value="@sz" selected>@sz</option> }
+                else { <option value="@sz">@sz</option> }
+            }
+        </select>
     </div>
 </div>
 
 @* ══ TABULKA ══ *@
-<form method="post" action="" id="exportForm">
-@Html.AntiForgeryToken()
 <div class="ci-table-wrap">
     <table class="ci-table" id="tabulkaObcanu">
         <thead>
@@ -262,7 +374,7 @@
                                 onclick="openDetailModal(@_obcan.Id)"
                                 title="Zobrazit detail">&#128065; Detail</button>
                         <button class="btn ci-btn-edit" type="button"
-                                onclick="location.href='UpravitZaznam?Id=@_obcan.Id'"
+                                onclick="openEditModal(@_obcan.Id)"
                                 title="Upravit záznam">&#9998; Upravit</button>
                         <button class="btn ci-btn-del" type="button"
                                 onclick="openDeleteModal(@_obcan.Id)"
@@ -284,15 +396,69 @@
     </table>
 </div>
 <div class="ci-export-bar">
-    <button class="btn ci-btn-export" type="submit" form="exportForm">&#8659; Exportovat vybrané do CSV</button>
+    <button class="btn ci-btn-export" type="button" onclick="exportSelected()">&#8659; Exportovat vybrané do CSV</button>
     <span class="ci-export-hint">Zaškrtněte záznamy a klikněte Exportovat.</span>
 </div>
-</form>
+
+@* ══ PAGINACE (DOLE) ══ *@
+<div class="ci-pagination-bar" style="margin-top:.5rem">
+    <div class="ci-pager">
+        @if (strankaAktualni > 1)
+        {
+            <button class="ci-page-btn" type="button" onclick="location.href='@(pageBase)&Page=1'" title="První">&#171;</button>
+            <button class="ci-page-btn" type="button" onclick="location.href='@(pageBase)&Page=@(strankaAktualni-1)'" title="Předchozí">&#8249;</button>
+        }
+        else
+        {
+            <button class="ci-page-btn" disabled>&#171;</button>
+            <button class="ci-page-btn" disabled>&#8249;</button>
+        }
+        <span class="ci-page-info">Stránka <strong>@strankaAktualni</strong> z <strong>@strankaPosledni</strong></span>
+        @if (strankaAktualni < strankaPosledni)
+        {
+            <button class="ci-page-btn" type="button" onclick="location.href='@(pageBase)&Page=@(strankaDalsi)'" title="Další">&#8250;</button>
+            <button class="ci-page-btn" type="button" onclick="location.href='@(pageBase)&Page=@(strankaPosledni)'" title="Poslední">&#187;</button>
+        }
+        else
+        {
+            <button class="ci-page-btn" disabled>&#8250;</button>
+            <button class="ci-page-btn" disabled>&#187;</button>
+        }
+    </div>
+    <div class="ci-page-jump">
+        <form method="get" action="" id="GoToPageFormBottom">
+            <label for="pageJumpBottom">Přejít na:</label>
+            <select id="pageJumpBottom" class="ci-page-select" name="Page" onchange="document.getElementById('GoToPageFormBottom').submit()">
+                @for (int i = 1; i <= strankaPosledni; i++)
+                {
+                    if (i == strankaAktualni) { <option value="@i" selected>@i</option> }
+                    else { <option value="@i">@i</option> }
+                }
+            </select>
+            <input type="hidden" name="SearchQuery" value="@sq" />
+            <input type="hidden" name="SortBy" value="@sortCol" />
+            <input type="hidden" name="PageSize" value="@pageSize" />
+        </form>
+    </div>
+    <div class="ci-page-jump">
+        <label for="pageSizeSelectBottom">Záznamů na stránku:</label>
+        <select id="pageSizeSelectBottom" class="ci-page-select" onchange="changePageSize(this.value)">
+            @foreach (var sz in pageSizeOptions)
+            {
+                if (sz == pageSize) { <option value="@sz" selected>@sz</option> }
+                else { <option value="@sz">@sz</option> }
+            }
+        </select>
+    </div>
+</div>
 
 <script>
     // ── Navigace a řazení ──
     function navSort(col) {
-        location.href = `?SearchQuery=@sq&SortBy=${col}&Page=1`;
+        location.href = `?SearchQuery=@sq&SortBy=${col}&PageSize=@pageSize&Page=1`;
+    }
+    function changePageSize(size) {
+        location.href = `?SearchQuery=@sq&SortBy=@sortCol&PageSize=${size}&Page=1`;
     }
 
     // ── DELETE MODAL ──
@@ -357,8 +523,40 @@
         currentDetailId = null;
     }
 
+    async function triggerExport(ids) {
+        try {
+            const resp = await fetch(`/Export?ids=${ids}`);
+            if (!resp.ok) {
+                const txt = await resp.text();
+                alert(`Export selhal (HTTP ${resp.status}):\n${txt.substring(0, 300)}`);
+                return;
+            }
+            const blob = await resp.blob();
+            if (blob.size === 0) { alert('Export vrátil prázdný soubor.'); return; }
+            const disposition = resp.headers.get('content-disposition') ?? '';
+            const fnMatch = disposition.match(/filename[^;=\n]*=["']?([^"';\n]+)["']?/i);
+            const fname = fnMatch ? fnMatch[1] : 'export.csv';
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = fname;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch(e) {
+            alert('Chyba exportu: ' + e.message);
+        }
+    }
+
     function exportDetail() {
-        if (currentDetailId) window.open(`Zaznam?Id=${currentDetailId}`, "_blank");
+        if (!currentDetailId) return;
+        triggerExport(currentDetailId);
+    }
+
+    function exportSelected() {
+        const checked = [...document.querySelectorAll('.ci-checkbox:checked')];
+        if (!checked.length) { alert('Vyberte alespoň jeden záznam.'); return; }
+        triggerExport(checked.map(c => c.value).join(','));
     }
 
     // ── NOVÝ ZÁZNAM MODAL ──
@@ -391,6 +589,98 @@
         btn.disabled = false; btn.textContent = "Uložit záznam";
     });
 
+    // ── NOVÝ PODNIK MODAL ──
+    function openNovyPodnikModal()  { document.getElementById("novyPodnikModal").style.display = "flex"; }
+    function closeNovyPodnikModal() { document.getElementById("novyPodnikModal").style.display = "none"; }
+
+    document.getElementById("novyPodnikForm").addEventListener("submit", async function(e) {
+        e.preventDefault();
+        const btn = document.getElementById("novyPodnikSubmitBtn");
+        btn.disabled = true; btn.textContent = "Ukládám…";
+        const resp = await fetch("/?handler=NovyPodnik", { method: "POST", body: new FormData(this) });
+        const d = await resp.json();
+        const msgEl = document.getElementById("novyPodnikModalMsg");
+        if (d.ok) {
+            msgEl.className = "ci-alert-success";
+            msgEl.textContent = "Podnik byl úspěšně uložen.";
+            msgEl.style.display = "block";
+            this.reset();
+            setTimeout(() => { closeNovyPodnikModal(); location.reload(); }, 1500);
+        } else {
+            msgEl.className = "ci-alert-error";
+            msgEl.textContent = d.error || "Chyba při ukládání.";
+            msgEl.style.display = "block";
+        }
+        btn.disabled = false; btn.textContent = "Uložit podnik";
+    });
+
+    // ── UPRAVIT ZÁZNAM MODAL ──
+    async function openEditModal(id) {
+        document.getElementById("editModal").style.display = "flex";
+        document.getElementById("editModalLoading").style.display = "block";
+        document.getElementById("editZaznamForm").style.display = "none";
+        document.getElementById("editModalMsg").style.display = "none";
+
+        const resp = await fetch(`/?handler=Detail&id=${id}`);
+        if (!resp.ok) { document.getElementById("editModalLoading").textContent = "Chyba při načítání."; return; }
+        const d = await resp.json();
+        if (!d.ok) { document.getElementById("editModalLoading").textContent = d.error; return; }
+
+        document.getElementById("editModalTitle").textContent =
+            "Upravit: " + [d.titul, d.jmeno, d.prijmeni].filter(Boolean).join(" ");
+
+        document.getElementById("uz_Id").value          = d.id;
+        document.getElementById("uz_Prijmeni").value    = d.prijmeni || "";
+        document.getElementById("uz_Jmeno").value       = d.jmeno || "";
+        document.getElementById("uz_Titul").value       = d.titul || "";
+        document.getElementById("uz_RodneJm").value     = d.rodneJm || "";
+        document.getElementById("uz_RC").value          = d.rc || "";
+        document.getElementById("uz_Adresa_Ulice").value = d.ulice || "";
+        document.getElementById("uz_Adresa_CP").value   = d.cp || "";
+        document.getElementById("uz_Adresa_Obec").value = d.adresaObec || "";
+        document.getElementById("uz_Adresa_PSC").value  = d.psc || "";
+        document.getElementById("refdocs2").value       = d.podnikNazev1 || "";
+
+        function toDateInput(s) {
+            if (!s) return "";
+            const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+            if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+            return s.split(' ')[0];
+        }
+        document.getElementById("uz_DatNastupu1").value = toDateInput(d.datNastupu1);
+        document.getElementById("uz_DatNastupu2").value = toDateInput(d.datNastupu2);
+        document.getElementById("uz_Datum").value       = toDateInput(d.datum);
+        document.getElementById("uz_DatVystaveno").value = toDateInput(d.datVystaveno);
+
+        const stavSel = document.getElementById("uz_Stav");
+        for (let opt of stavSel.options) { opt.selected = opt.value === d.stav; }
+
+        document.getElementById("editModalLoading").style.display = "none";
+        document.getElementById("editZaznamForm").style.display = "block";
+    }
+
+    function closeEditModal() { document.getElementById("editModal").style.display = "none"; }
+
+    document.getElementById("editZaznamForm").addEventListener("submit", async function(e) {
+        e.preventDefault();
+        const btn = document.getElementById("editSubmitBtn");
+        btn.disabled = true; btn.textContent = "Ukládám…";
+        const resp = await fetch("/?handler=UpravitZaznam", { method: "POST", body: new FormData(this) });
+        const d = await resp.json();
+        const msgEl = document.getElementById("editModalMsg");
+        if (d.ok) {
+            msgEl.className = "ci-alert-success";
+            msgEl.textContent = "Záznam byl úspěšně upraven.";
+            msgEl.style.display = "block";
+            setTimeout(() => { closeEditModal(); location.reload(); }, 1500);
+        } else {
+            msgEl.className = "ci-alert-error";
+            msgEl.textContent = d.error || "Chyba při ukládání.";
+            msgEl.style.display = "block";
+        }
+        btn.disabled = false; btn.textContent = "Uložit změny";
+    });
+
     // ── PODNIK AUTOCOMPLETE ──
     const podnikListJson = @Html.Raw(podnikListJson);
 
@@ -420,6 +710,34 @@
             li.classList.add("selected");
             document.getElementById("refdocs").value = li.dataset.raw;
             ulist.innerHTML = "";
+        });
+    })();
+
+    // ── PODNIK AUTOCOMPLETE (edit modal) ──
+    (function() {
+        const ulist2 = document.querySelector("#refdocs2_list ul");
+        function escapeRegex(t) { return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+        document.getElementById("refdocs2").addEventListener("keyup", function() {
+            const s = this.value.trim();
+            if (s.length >= 3) {
+                const re = new RegExp(escapeRegex(s), 'gi');
+                const filtered = podnikListJson.filter(n => n.toLowerCase().includes(s.toLowerCase())).sort((a,b)=>a.localeCompare(b));
+                ulist2.innerHTML = "";
+                filtered.forEach(name => {
+                    const li = document.createElement("li");
+                    li.innerHTML = name.replace(re, m => `<mark>${m}</mark>`);
+                    li.dataset.raw = name;
+                    ulist2.appendChild(li);
+                });
+            } else { ulist2.innerHTML = ""; }
+        });
+        ulist2.addEventListener("click", function(e) {
+            const li = e.target.closest("li");
+            if (!li) return;
+            ulist2.querySelectorAll("li").forEach(l => l.classList.remove("selected"));
+            li.classList.add("selected");
+            document.getElementById("refdocs2").value = li.dataset.raw;
+            ulist2.innerHTML = "";
         });
     })();
 </script>

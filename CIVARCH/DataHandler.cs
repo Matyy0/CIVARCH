@@ -1,4 +1,5 @@
 ﻿using System.Data;
+using System.Globalization;
 using System.Text;
 
 namespace CIVARCH
@@ -15,6 +16,16 @@ namespace CIVARCH
         /// <param name="prijmeni">Prijmeni obcana</param>
         /// <param name="titul">Titul obcana</param>
         /// <returns>Retezec, ktery obsahuje vsechny tri informace o obcanovi</returns>
+        public static string StripDiacritics(string text)
+        {
+            var decomposed = text.Normalize(NormalizationForm.FormD);
+            var sb = new StringBuilder(decomposed.Length);
+            foreach (char c in decomposed)
+                if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+                    sb.Append(c);
+            return sb.ToString().Normalize(NormalizationForm.FormC);
+        }
+
         public static string CreateFullName(string jmeno, string prijmeni, string? titul)
         {
             if (titul != null && titul != "")

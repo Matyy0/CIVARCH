@@ -1,7 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using System.Data;
-using System.Text;
 
 namespace CIVARCH.Pages
 {
@@ -23,6 +21,7 @@ namespace CIVARCH.Pages
                 return new JsonResult(new
                 {
                     ok = true,
+                    id           = z.Obcan.Id,
                     jmeno        = z.Obcan.Jmeno,
                     prijmeni     = z.Obcan.Prijmeni,
                     titul        = z.Obcan.Titul,
@@ -30,7 +29,12 @@ namespace CIVARCH.Pages
                     datumNarozeni= z.Obcan.DatumNarozeni,
                     rodneJm      = z.Obcan.RodneJm,
                     adresa       = z.Obcan.Adresa?.ToString() ?? "–",
+                    ulice        = z.Obcan.Adresa?.Ulice ?? "",
+                    cp           = z.Obcan.Adresa?.CisloPopisne ?? "",
+                    adresaObec   = z.Obcan.Adresa?.Obec ?? "",
+                    psc          = z.Obcan.Adresa?.Psc ?? "",
                     organizace   = z.Organizace,
+                    organizaceCislo = z.Obcan.OrganizaceCislo,
                     stav         = z.Rizeni.Stav,
                     datNastupu1  = z.Rizeni.DatNastupu1,
                     datNastupu2  = z.Rizeni.DatNastupu2,
@@ -118,50 +122,68 @@ namespace CIVARCH.Pages
             }
         }
 
-        public async Task<ActionResult> OnPost()
+        public async Task<IActionResult> OnPostNovyPodnikAsync()
         {
-            string id = Request.Form["ExportId"].ToString();
-            if (string.IsNullOrEmpty(id)) return new EmptyResult();
+            string? okrOrp    = Request.Form["np_OkrOrp"];
+            string? cisOrp    = Request.Form["np_CisOrp"];
+            string? orgNazev1 = Request.Form["np_OrgNazev1"];
+            string? ulice     = Request.Form["np_Ulice"];
+            string? obec      = Request.Form["np_Obec"];
+            string? psc       = Request.Form["np_Psc"];
+            string? predmet   = Request.Form["np_PredmetCinn"];
 
-            var zaznamy = new List<Zaznam>();
-            foreach (string eid in id.Split(','))
-                zaznamy.Add(await DatabaseHandler.LoadSingleZaznamById(eid));
-
-            var table = DataHandler.ExportDataToDataTable(zaznamy);
-            var output = ToCsvByteArray(table, ";");
-            output = Encoding.Convert(Encoding.UTF8, Encoding.Unicode, output);
-
-            string filename = "export_" + DateTime.Now.ToString("dd.MM.yyyy-HH-mm-ss") + ".csv";
-            return new FileContentResult(output, "text/csv") { FileDownloadName = filename };
+            try
+            {
+                int highestId = await DatabaseHandler.GetHighestColumnIndexAsync("tbPODNIK", "PODNIK_Id");
+                var podnik = new Podnik(
+                    (highestId + 1).ToString(),
+                    orgNazev1 ?? "", "",
+                    ulice ?? "", obec ?? "", psc ?? "",
+                    predmet ?? "", okrOrp ?? "", cisOrp ?? "");
+                DatabaseHandler.SavePodnik(podnik);
+                return new JsonResult(new { ok = true });
+            }
+            catch (Exception ex)
+            {
+                return new JsonResult(new { ok = false, error = ex.Message });
+            }
         }
 
-        private byte[] ToCsvByteArray(DataTable input, string delimeter = ",")
+        public async Task<IActionResult> OnPostUpravitZaznamAsync()
         {
-            var stream = new MemoryStream();
-            var sw = new StreamWriter(stream);
+            string? id       = Request.Form["uz_Id"];
+            string? prijmeni = Request.Form["uz_Prijmeni"];
+            string? jmeno    = Request.Form["uz_Jmeno"];
+            string? titul    = Request.Form["uz_Titul"];
+            string? rc       = Request.Form["uz_RC"];
+            string? rodneJm  = Request.Form["uz_RodneJm"];
+            string? ulice    = Request.Form["uz_Adresa_Ulice"];
+            string? cp       = Request.Form["uz_Adresa_CP"];
+            string? obec     = Request.Form["uz_Adresa_Obec"];
+            string? psc      = Request.Form["uz_Adresa_PSC"];
+            string? podnik   = Request.Form["uz_Rizeni_Podnik"];
+            string? dat1     = Request.Form["uz_Rizeni_DatNastupu1"];
+            string? dat2     = Request.Form["uz_Rizeni_DatNastupu2"];
+            string? datum    = Request.Form["uz_Rizeni_Datum"];
+            string? datV     = Request.Form["uz_Rizeni_DatVystaveno"];
+            string? stav     = Request.Form["uz_Rizeni_Stav"];
 
-            for (int i = 0; i < input.Columns.Count; i++)
+            try
             {
-                sw.Write(input.Columns[i]);
-                if (i < input.Columns.Count - 1) sw.Write(delimeter);
+                string orgCislo = await DatabaseHandler.GetCisoOrp(podnik ?? "");
+                var adresa   = new KontaktniAdresa(ulice, cp, obec, psc);
+                var rizeni   = new Rizeni(podnik, dat1, dat2, datum, datV, stav);
+                var obcanObj = new Obcan(prijmeni, jmeno, titul, rc, rodneJm, adresa, orgCislo, int.Parse(id ?? "0"));
+                var zaznam   = new Zaznam(obcanObj, rizeni, orgCislo, User.Identity?.Name ?? "");
+                DatabaseHandler.UpdateZaznam(zaznam);
+                DatabaseHandler.UpdateRizeniTable(rc ?? "");
+                return new JsonResult(new { ok = true });
             }
-            sw.Write(sw.NewLine);
-
-            foreach (DataRow row in input.Rows)
+            catch (Exception ex)
             {
-                for (int i = 0; i < input.Columns.Count; i++)
-                {
-                    if (!Convert.IsDBNull(row[i]))
-                    {
-                        string value = row[i].ToString() ?? "";
-                        sw.Write(value.Contains(',') ? $"\"{value}\"" : value);
-                    }
-                    if (i < input.Columns.Count - 1) sw.Write(delimeter);
-                }
-                sw.Write(sw.NewLine);
+                return new JsonResult(new { ok = false, error = ex.Message });
             }
-            sw.Close();
-            return stream.ToArray();
         }
+
     }
 }
